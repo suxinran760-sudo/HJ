@@ -1,0 +1,86 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.4.1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unzip project if uploaded as zip
+        shell: bash
+        run: |
+          for z in ./*.zip; do
+            [ -e "$z" ] || continue
+            echo "Unzipping $z"
+            if command -v unzip >/dev/null 2>&1; then
+              unzip -q -o "$z" -d ./_project
+            else
+              mkdir -p _project && (cd _project && jar xf "../$z")
+            fi
+          done
+
+      - name: Locate project
+        shell: bash
+        run: |
+          PROJECT_FILE="$(find . -name project.godot -not -path '*/.git/*' -print -quit)"
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "::error::project.godot not found"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
+
+      - name: Prepare debug keystore
+        shell: bash
+        run: |
+          KS=/root/debug.keystore
+          if [ ! -f "$KS" ]; then
+            keytool -keyalg RSA -genkeypair -alias androiddebugkey \
+              -keypass android -keystore "$KS" -storepass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -validity 9999 -deststoretype pkcs12
+          fi
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$KS" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Import project
+        run: godot --headless --editor --path "$PROJECT_DIR" --quit
+
+      - name: Export debug APK
+        run: |
+          mkdir -p "$PROJECT_DIR/build"
+          godot --headless --path "$PROJECT_DIR" \
+            --export-debug "Android" \
+            "$PROJECT_DIR/build/Hajimi-Warfare.apk"
+
+      - name: Verify APK
+        run: |
+          test -s "$PROJECT_DIR/build/Hajimi-Warfare.apk"
+          ls -lh "$PROJECT_DIR/build/Hajimi-Warfare.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hajimi-Warfare-APK
+          path: ${{ env.PROJECT_DIR }}/build/Hajimi-Warfare.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish to Releases (direct phone download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: 哈基米枪战 build ${{ github.run_number }}
+          files: ${{ env.PROJECT_DIR }}/build/Hajimi-Warfare.apk
