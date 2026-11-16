@@ -41,6 +41,21 @@ jobs:
           fi
           echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
 
+      - name: Install Android build tools 35
+        shell: bash
+        run: |
+          SDK="$(grep -hr 'export/android/android_sdk_path' /root/.config/godot 2>/dev/null | sed -E 's/.*= *"(.*)"/\1/' | head -n1)"
+          [ -n "$SDK" ] || SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/lib/android-sdk}}"
+          echo "SDK=$SDK"
+          ls "$SDK" "$SDK/build-tools" || true
+          SM="$(find "$SDK" /opt /usr -name sdkmanager -type f 2>/dev/null | head -n1)"
+          echo "sdkmanager=$SM"
+          yes | "$SM" --sdk_root="$SDK" --licenses >/dev/null || true
+          "$SM" --sdk_root="$SDK" "build-tools;35.0.1" "platforms;android-35" "platform-tools"
+          ls "$SDK/build-tools"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
       - name: Prepare debug keystore
         shell: bash
         run: |
