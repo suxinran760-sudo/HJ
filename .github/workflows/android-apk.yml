@@ -67,7 +67,7 @@ jobs:
       - name: Import project
         run: godot --headless --editor --path "$PROJECT_DIR" --quit
 
-      - name: Install Android build tools 35 and configure Godot
+      - name: Install Android build tools 34 and configure Godot
         shell: bash
         run: |
           OLD="$(find / -type d -path '*/build-tools/33.0.2' -not -path '/proc/*' 2>/dev/null | head -n1)"
@@ -80,8 +80,8 @@ jobs:
           SM="$(find "$SDK" /opt /usr -name sdkmanager -type f 2>/dev/null | head -n1)"
           echo "sdkmanager=$SM"
           yes | "$SM" --sdk_root="$SDK" --licenses >/dev/null || true
-          "$SM" --sdk_root="$SDK" "build-tools;35.0.1" "platforms;android-35" "platform-tools"
-          test -d "$SDK/build-tools/35.0.1" || { echo "build-tools 35.0.1 missing"; exit 1; }
+          "$SM" --sdk_root="$SDK" "build-tools;34.0.0" "platforms;android-34" "platform-tools"
+          test -d "$SDK/build-tools/34.0.0" || { echo "build-tools 34.0.0 missing"; exit 1; }
           JH="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")}"
           echo "JAVA=$JH"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
