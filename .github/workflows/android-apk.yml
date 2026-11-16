@@ -58,7 +58,7 @@ jobs:
       - name: Import project
         run: godot --headless --editor --path "$PROJECT_DIR" --quit
 
-      - name: Install Android build tools 35 into Godot SDK
+      - name: Install Android build tools 35 and configure Godot
         shell: bash
         run: |
           OLD="$(find / -type d -path '*/build-tools/33.0.2' -not -path '/proc/*' 2>/dev/null | head -n1)"
@@ -72,18 +72,27 @@ jobs:
           echo "sdkmanager=$SM"
           yes | "$SM" --sdk_root="$SDK" --licenses >/dev/null || true
           "$SM" --sdk_root="$SDK" "build-tools;35.0.1" "platforms;android-35" "platform-tools"
-          echo "build-tools now:"; ls "$SDK/build-tools"
+          test -d "$SDK/build-tools/35.0.1" || { echo "build-tools 35.0.1 missing"; exit 1; }
+          JH="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")}"
+          echo "JAVA=$JH"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-          for f in /root/.config/godot/editor_settings-*.tres; do
-            [ -e "$f" ] || continue
-            if grep -q '^export/android/android_sdk_path' "$f"; then
-              sed -i "s|^export/android/android_sdk_path.*|export/android/android_sdk_path = \"$SDK\"|" "$f"
+          echo "JAVA_HOME=$JH" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.config/godot"
+          F="$HOME/.config/godot/editor_settings-4.4.tres"
+          if [ ! -f "$F" ]; then
+            printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\n' > "$F"
+          fi
+          for kv in "export/android/android_sdk_path|$SDK" "export/android/java_sdk_path|$JH" "export/android/debug_keystore|/root/debug.keystore" "export/android/debug_keystore_user|androiddebugkey" "export/android/debug_keystore_pass|android"; do
+            k="${kv%%|*}"; v="${kv#*|}"
+            if grep -q "^$k" "$F"; then
+              sed -i "s|^$k.*|$k = \"$v\"|" "$F"
             else
-              echo "export/android/android_sdk_path = \"$SDK\"" >> "$f"
+              echo "$k = \"$v\"" >> "$F"
             fi
-            echo "patched $f"
           done
+          echo "HOME=$HOME settings file: $F"
+          cat "$F"
 
       - name: Export debug APK
         shell: bash
@@ -95,8 +104,13 @@ jobs:
             "$PROJECT_DIR/build/Hajimi-Warfare.apk" 2>&1 | tee export.log
           CODE=${PIPESTATUS[0]}
           if [ "$CODE" -ne 0 ]; then
-            echo "=========== KEY ERRORS (screenshot this) ==========="
-            grep -n -i -E "error|fail|could not|cannot|missing|invalid|not found|unable" export.log | grep -v "5037" | tail -25
+            echo "=========== INFO (screenshot this) ==========="
+            echo "ANDROID_HOME=$ANDROID_HOME JAVA_HOME=$JAVA_HOME HOME=$HOME"
+            echo "build-tools: $(ls "$ANDROID_HOME/build-tools" | tr '\n' ' ')"
+            echo "cmdline-tools: $(ls "$ANDROID_HOME/cmdline-tools" 2>&1 | tr '\n' ' ')"
+            echo "platform-tools: $(ls "$ANDROID_HOME/platform-tools" 2>&1 | head -n3 | tr '\n' ' ')"
+            echo "=========== CONFIG ERRORS ==========="
+            sed -n '/configuration errors/,/Project export for preset/p' export.log | head -n 15
             exit "$CODE"
           fi
 
