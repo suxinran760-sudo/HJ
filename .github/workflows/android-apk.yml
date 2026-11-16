@@ -55,6 +55,15 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
 
+      - name: Link Godot export templates
+        shell: bash
+        run: |
+          ls /root/.local/share/godot/export_templates/ || true
+          mkdir -p "$HOME/.local/share/godot"
+          rm -rf "$HOME/.local/share/godot/export_templates"
+          ln -s /root/.local/share/godot/export_templates "$HOME/.local/share/godot/export_templates"
+          ls -la "$HOME/.local/share/godot/export_templates/"*/ | head -n 20
+
       - name: Import project
         run: godot --headless --editor --path "$PROJECT_DIR" --quit
 
